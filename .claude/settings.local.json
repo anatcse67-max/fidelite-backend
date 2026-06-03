@@ -30,7 +30,8 @@
       "Bash(git push *)",
       "Bash(curl -s https://fidelite-backend-production.up.railway.app/carte/test)",
       "Bash(curl -s https://fidelite-dashboard-kohl.vercel.app)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(curl -s \"https://fidelite-dashboard-kohl.vercel.app/api/manifest/ID-TEST\")"
     ]
   }
 }
