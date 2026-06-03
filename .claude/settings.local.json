@@ -14,7 +14,14 @@
       "Bash(r)",
       "Bash(Set-Content -Path \".env\" -Value \"SUPABASE_URL=`r`nSUPABASE_SERVICE_KEY=`r`nJWT_SECRET=`r`nPORT=3000\" -Encoding utf8)",
       "Bash(timeout 5 node server.js)",
-      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('hex'\\)\\)\")"
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('hex'\\)\\)\")",
+      "Bash(ls .. 2>&1)",
+      "Bash(npm create *)",
+      "Bash(rm -f ../fidelite-dashboard/src/App.css ../fidelite-dashboard/src/assets/react.svg ../fidelite-dashboard/public/vite.svg 2>&1; ls ../fidelite-dashboard/src/)",
+      "Bash(npx create-expo-app *)",
+      "Bash(npx expo *)",
+      "Bash(npm run *)",
+      "Bash(timeout 4 node server.js)"
     ]
   }
 }
