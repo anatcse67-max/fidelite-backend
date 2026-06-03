@@ -10,6 +10,7 @@ app.use('/auth', require('./routes/auth'))
 app.use('/clients', require('./routes/clients'))
 app.use('/carte', require('./routes/carte'))
 app.use('/inscription', require('./routes/inscription'))
+app.use('/notifications', require('./routes/notifications'))
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`))
