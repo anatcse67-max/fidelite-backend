@@ -1,8 +1,32 @@
 {
   "permissions": {
     "allow": [
-      "Bash(*)",
-      "Skill(*)"
+      "Bash(git --version)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(git config *)",
+      "Bash(npm install *)",
+      "Bash(New-Item -ItemType File -Path \".env\" -Force)",
+      "Bash(Out-Null)",
+      "Bash(Set-Content \".env\" -Encoding utf8 \"SUPABASE_URL=`nSUPABASE_SERVICE_KEY=`nJWT_SECRET=`nPORT=3000\")",
+      "Bash(r)",
+      "Bash(Set-Content -Path \".env\" -Value \"SUPABASE_URL=`r`nSUPABASE_SERVICE_KEY=`r`nJWT_SECRET=`r`nPORT=3000\" -Encoding utf8)",
+      "Bash(timeout 5 node server.js)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('hex'\\)\\)\")",
+      "Bash(ls .. 2>&1)",
+      "Bash(npm create *)",
+      "Bash(rm -f ../fidelite-dashboard/src/App.css ../fidelite-dashboard/src/assets/react.svg ../fidelite-dashboard/public/vite.svg 2>&1; ls ../fidelite-dashboard/src/)",
+      "Bash(npx create-expo-app *)",
+      "Bash(npx expo *)",
+      "Bash(npm run *)",
+      "Bash(timeout 4 node server.js)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(ipconfig)",
+      "Bash(node server.js)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"test@test.com\",\"password\":\"test123\",\"nom_enseigne\":\"Boulangerie Martin\",\"type_activite\":\"Boulangerie\",\"emoji\":\"🥐\",\"couleur\":\"#f97316\",\"pts_par_passage\":1,\"seuil_reward\":10,\"reward_desc\":\"Café offert\"}')"
     ]
   }
 }
