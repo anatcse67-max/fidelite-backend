@@ -27,7 +27,8 @@
       "Bash(ipconfig)",
       "Bash(node server.js)",
       "Bash(curl -s -X POST http://localhost:3000/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"test@test.com\",\"password\":\"test123\",\"nom_enseigne\":\"Boulangerie Martin\",\"type_activite\":\"Boulangerie\",\"emoji\":\"🥐\",\"couleur\":\"#f97316\",\"pts_par_passage\":1,\"seuil_reward\":10,\"reward_desc\":\"Café offert\"}')",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(curl -s https://fidelite-backend-production.up.railway.app/carte/test)"
     ]
   }
 }
