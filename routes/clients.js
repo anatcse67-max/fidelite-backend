@@ -91,6 +91,28 @@ router.post('/:id/scan', async (req, res) => {
   res.json({ client: updateResult.data, points_ajoutes: pts })
 })
 
+// Réinitialiser les points après récompense
+router.post('/:id/reset', async (req, res) => {
+  const { id } = req.params
+
+  const { data: client } = await supabase.from('clients').select('commercant_id, points').eq('id', id).single()
+  if (!client) return res.status(404).json({ error: 'Client introuvable' })
+  if (client.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
+
+  const { data, error } = await supabase.from('clients').update({ points: 0 }).eq('id', id).select().single()
+  if (error) return res.status(500).json({ error: error.message })
+
+  // Enregistrer le reset comme passage spécial
+  await supabase.from('passages').insert([{
+    client_id: id,
+    commercant_id: req.commercant.id,
+    points_ajoutes: 0,
+    note: `🎁 Récompense récupérée — points remis à zéro (${client.points} pts)`
+  }])
+
+  res.json({ client: data })
+})
+
 router.delete('/:id', async (req, res) => {
   const { id } = req.params
 

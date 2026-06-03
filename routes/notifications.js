@@ -22,6 +22,19 @@ function authMiddleware(req, res, next) {
   }
 }
 
+// Historique des notifications
+router.get('/history', authMiddleware, async (req, res) => {
+  const { data, error } = await supabase
+    .from('notifications_history')
+    .select('*')
+    .eq('commercant_id', req.commercant.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
 // Clé publique VAPID (pour le frontend)
 router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY })
@@ -83,6 +96,14 @@ router.post('/send', authMiddleware, async (req, res) => {
       }
     }
   }))
+
+  // Sauvegarder dans l'historique
+  await supabase.from('notifications_history').insert([{
+    commercant_id: req.commercant.id,
+    title,
+    body,
+    sent_to: sent
+  }])
 
   res.json({ sent, failed })
 })
