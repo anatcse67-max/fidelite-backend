@@ -5,7 +5,7 @@ const { Resend } = require('resend')
 const supabase = require('../lib/supabase')
 
 const router = express.Router()
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 function authMiddleware(req, res, next) {
   const header = req.headers.authorization
@@ -91,7 +91,7 @@ router.post('/forgot-password', async (req, res) => {
   const token = jwt.sign({ id: data.id, email }, process.env.JWT_SECRET, { expiresIn: '1h' })
   const resetUrl = `${process.env.DASHBOARD_URL}/reset-password?token=${token}`
 
-  if (process.env.RESEND_API_KEY) {
+  if (resend) {
     await resend.emails.send({
       from: 'Fidélité <noreply@resend.dev>',
       to: email,
