@@ -6,7 +6,13 @@ const supabase = require('../lib/supabase')
 const router = express.Router()
 
 router.post('/register', async (req, res) => {
-  const { email, password, nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc } = req.body
+  const { email, password, nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc, register_code } = req.body
+
+  // Vérification du code d'accès
+  const validCode = process.env.REGISTER_CODE
+  if (validCode && register_code !== validCode) {
+    return res.status(403).json({ error: 'Code d\'accès invalide' })
+  }
 
   if (!email || !password || !nom_enseigne) {
     return res.status(400).json({ error: 'email, password et nom_enseigne sont requis' })

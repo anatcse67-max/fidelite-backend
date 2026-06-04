@@ -17,7 +17,7 @@ router.get('/', authMiddleware, async (req, res) => {
   const cid = req.commercant.id
 
   const [clientsRes, passagesRes, notifsRes] = await Promise.all([
-    supabase.from('clients').select('id, points, created_at').eq('commercant_id', cid),
+    supabase.from('clients').select('id, prenom, nom, points, created_at').eq('commercant_id', cid),
     supabase.from('passages').select('points_ajoutes, created_at').eq('commercant_id', cid),
     supabase.from('notifications_history').select('id').eq('commercant_id', cid)
   ])
