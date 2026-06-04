@@ -29,12 +29,41 @@ router.use(authMiddleware)
 router.get('/', async (req, res) => {
   const { data, error } = await supabase
     .from('clients')
+    .select('*, passages(count)')
+    .eq('commercant_id', req.commercant.id)
+    .order('created_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  // Ajouter le nb de passages à chaque client
+  const clients = data.map(c => ({
+    ...c,
+    nb_passages: c.passages?.[0]?.count || 0,
+    passages: undefined
+  }))
+
+  res.json(clients)
+})
+
+// Export CSV
+router.get('/export', async (req, res) => {
+  const { data, error } = await supabase
+    .from('clients')
     .select('*')
     .eq('commercant_id', req.commercant.id)
     .order('created_at', { ascending: false })
 
   if (error) return res.status(500).json({ error: error.message })
-  res.json(data)
+
+  const header = 'ID,Prénom,Nom,Téléphone,Email,Points,Date inscription'
+  const rows = data.map(c =>
+    `${c.id},"${c.prenom || ''}","${c.nom || ''}","${c.telephone || ''}","${c.email || ''}",${c.points},"${new Date(c.created_at).toLocaleDateString('fr-FR')}"`
+  )
+  const csv = [header, ...rows].join('\n')
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', 'attachment; filename="clients.csv"')
+  res.send('﻿' + csv) // BOM pour Excel
 })
 
 router.post('/', async (req, res) => {
