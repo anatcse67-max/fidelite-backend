@@ -40,6 +40,22 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY })
 })
 
+// Supprimer une notification de l'historique
+router.delete('/history/:id', authMiddleware, async (req, res) => {
+  const { data: notif } = await supabase
+    .from('notifications_history')
+    .select('commercant_id')
+    .eq('id', req.params.id)
+    .single()
+
+  if (!notif || notif.commercant_id !== req.commercant.id)
+    return res.status(403).json({ error: 'Non autorisé' })
+
+  const { error } = await supabase.from('notifications_history').delete().eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ success: true })
+})
+
 // Le client s'abonne aux notifications
 router.post('/subscribe', async (req, res) => {
   const { subscription, client_id, commercant_id } = req.body
