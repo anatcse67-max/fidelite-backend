@@ -29,17 +29,19 @@ router.use(authMiddleware)
 router.get('/', async (req, res) => {
   const { data, error } = await supabase
     .from('clients')
-    .select('*, passages(count)')
+    .select('*')
     .eq('commercant_id', req.commercant.id)
     .order('created_at', { ascending: false })
 
   if (error) return res.status(500).json({ error: error.message })
 
-  // Ajouter le nb de passages à chaque client
-  const clients = data.map(c => ({
-    ...c,
-    nb_passages: c.passages?.[0]?.count || 0,
-    passages: undefined
+  // Compter les passages pour chaque client
+  const clients = await Promise.all(data.map(async c => {
+    const { count } = await supabase
+      .from('passages')
+      .select('*', { count: 'exact', head: true })
+      .eq('client_id', c.id)
+    return { ...c, nb_passages: count || 0 }
   }))
 
   res.json(clients)
