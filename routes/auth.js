@@ -59,11 +59,13 @@ router.post('/login', async (req, res) => {
 
 // Modifier le profil
 router.put('/profile', authMiddleware, async (req, res) => {
-  const { nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc } = req.body
+  const { nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc,
+    mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min } = req.body
 
   const { data, error } = await supabase
     .from('commercants')
-    .update({ nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc })
+    .update({ nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc,
+      mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min })
     .eq('id', req.commercant.id)
     .select().single()
 

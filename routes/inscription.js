@@ -29,7 +29,7 @@ function generateId() {
 router.get('/:commercant_id', async (req, res) => {
   const { data, error } = await supabase
     .from('commercants')
-    .select('id, nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc')
+    .select('id, nom_enseigne, type_activite, emoji, couleur, icon_url, pts_par_passage, seuil_reward, reward_desc, parrainage_actif, mode_points')
     .eq('id', req.params.commercant_id)
     .single()
 

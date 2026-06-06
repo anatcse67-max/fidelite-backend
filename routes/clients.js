@@ -105,43 +105,101 @@ router.post('/', async (req, res) => {
 
 router.post('/:id/scan', async (req, res) => {
   const { id } = req.params
-  const { note } = req.body
+  const { note, montant } = req.body
 
+  // Récupérer toutes les infos du commerçant en une seule requête
   const { data: commercant, error: cErr } = await supabase
     .from('commercants')
-    .select('pts_par_passage')
+    .select('pts_par_passage, nom_enseigne, seuil_reward, reward_desc, mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min')
     .eq('id', req.commercant.id)
     .single()
 
   if (cErr) return res.status(500).json({ error: cErr.message })
 
-  const pts = commercant.pts_par_passage || 1
-
   const { data: client, error: clientErr } = await supabase
     .from('clients')
-    .select('points, commercant_id')
+    .select('points, commercant_id, referred_by, parrainage_valide')
     .eq('id', id)
     .single()
 
   if (clientErr || !client) return res.status(404).json({ error: 'Client introuvable' })
   if (client.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
 
-  const newPoints = (client.points || 0) + pts
+  // Calculer les points selon le mode
+  let pts
+  if (commercant.mode_points === 'montant' && montant) {
+    pts = Math.floor(parseFloat(montant) * (commercant.euro_to_points || 1))
+  } else {
+    pts = commercant.pts_par_passage || 1
+  }
 
-  const [updateResult, passageResult] = await Promise.all([
+  const oldPoints = client.points || 0
+  const newPoints = oldPoints + pts
+
+  // Compter les passages existants (pour détecter le 1er scan)
+  const { count: nbPassages } = await supabase
+    .from('passages')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', id)
+
+  const isPremierScan = nbPassages === 0
+
+  // Mise à jour points + enregistrement passage
+  const [updateResult] = await Promise.all([
     supabase.from('clients').update({ points: newPoints }).eq('id', id).select().single(),
-    supabase.from('passages').insert([{ client_id: id, commercant_id: req.commercant.id, points_ajoutes: pts, note }])
+    supabase.from('passages').insert([{ client_id: id, commercant_id: req.commercant.id, points_ajoutes: pts, note: note || (commercant.mode_points === 'montant' && montant ? `${montant}€` : null) }])
   ])
 
   if (updateResult.error) return res.status(500).json({ error: updateResult.error.message })
 
-  // Notif si récompense débloquée
-  const { data: comm } = await supabase.from('commercants').select('nom_enseigne, seuil_reward, reward_desc').eq('id', req.commercant.id).single()
-  if (comm && newPoints >= comm.seuil_reward && client.points < comm.seuil_reward) {
-    sendPushToClient(id, `🎁 Récompense débloquée !`, `Félicitations ! Vous avez atteint ${comm.seuil_reward} pts chez ${comm.nom_enseigne}. Votre récompense : ${comm.reward_desc || 'surprise'}`)
+  // Vérifier paliers débloqués
+  const { data: paliers } = await supabase
+    .from('paliers')
+    .select('*')
+    .eq('commercant_id', req.commercant.id)
+    .order('points_requis', { ascending: true })
+
+  const palierDebloque = paliers?.find(p => newPoints >= p.points_requis && oldPoints < p.points_requis)
+  if (palierDebloque) {
+    const rewardText = palierDebloque.type === 'reduction'
+      ? `-${palierDebloque.valeur}% de réduction`
+      : palierDebloque.description
+    sendPushToClient(id, `🎁 Récompense débloquée !`, `${palierDebloque.points_requis} pts atteints chez ${commercant.nom_enseigne} ! ${rewardText}`)
   }
 
-  res.json({ client: updateResult.data, points_ajoutes: pts })
+  // Parrainage : valider au 1er scan si pas encore validé
+  let parrainageBonus = null
+  if (isPremierScan && client.referred_by && !client.parrainage_valide && commercant.parrainage_actif) {
+    // Marquer le parrainage comme validé
+    await supabase.from('clients').update({ parrainage_valide: true }).eq('id', id)
+
+    // Compter les parrainages validés du parrain
+    const { count: nbParrainages } = await supabase
+      .from('clients')
+      .select('*', { count: 'exact', head: true })
+      .eq('referred_by', client.referred_by)
+      .eq('parrainage_valide', true)
+
+    // Vérifier si le seuil de parrainages est atteint
+    const nbMin = commercant.parrainage_nb_min || 1
+    if (nbParrainages % nbMin === 0) {
+      const bonusPts = commercant.parrainage_points || 5
+      const { data: parrain } = await supabase.from('clients').select('points, prenom').eq('id', client.referred_by).single()
+      if (parrain) {
+        await supabase.from('clients').update({ points: parrain.points + bonusPts }).eq('id', client.referred_by)
+        await supabase.from('passages').insert([{
+          client_id: client.referred_by,
+          commercant_id: req.commercant.id,
+          points_ajoutes: bonusPts,
+          note: `🤝 Parrainage validé — ${nbParrainages} filleul(s) actif(s) — +${bonusPts} pts`
+        }])
+        sendPushToClient(client.referred_by, `🤝 Parrainage validé !`, `Votre filleul vient de faire son premier passage chez ${commercant.nom_enseigne}. +${bonusPts} pts pour vous !`)
+        parrainageBonus = { parrain_id: client.referred_by, points: bonusPts }
+      }
+    }
+  }
+
+  res.json({ client: updateResult.data, points_ajoutes: pts, palier_debloque: palierDebloque || null, parrainage_bonus: parrainageBonus })
 })
 
 // Réinitialiser les points après récompense
@@ -164,6 +222,49 @@ router.post('/:id/reset', async (req, res) => {
   }])
 
   res.json({ client: data })
+})
+
+// Retirer des points manuellement
+router.post('/:id/retirer-points', async (req, res) => {
+  const { id } = req.params
+  const { points, note } = req.body
+  if (!points || points <= 0) return res.status(400).json({ error: 'Nombre de points invalide' })
+
+  const { data: client } = await supabase.from('clients').select('commercant_id, points').eq('id', id).single()
+  if (!client) return res.status(404).json({ error: 'Client introuvable' })
+  if (client.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
+
+  const newPoints = Math.max(0, client.points - points)
+  const [updateResult] = await Promise.all([
+    supabase.from('clients').update({ points: newPoints }).eq('id', id).select().single(),
+    supabase.from('passages').insert([{ client_id: id, commercant_id: req.commercant.id, points_ajoutes: -points, note: note || `🎁 Récompense utilisée — -${points} pts` }])
+  ])
+  if (updateResult.error) return res.status(500).json({ error: updateResult.error.message })
+  res.json({ client: updateResult.data })
+})
+
+// Paliers du commerçant
+router.get('/paliers', async (req, res) => {
+  const { data, error } = await supabase.from('paliers').select('*').eq('commercant_id', req.commercant.id).order('points_requis')
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+router.post('/paliers', async (req, res) => {
+  const { points_requis, description, type, valeur } = req.body
+  if (!points_requis || !description) return res.status(400).json({ error: 'Champs requis' })
+  const { data, error } = await supabase.from('paliers')
+    .insert([{ commercant_id: req.commercant.id, points_requis, description, type: type || 'texte', valeur }])
+    .select().single()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+router.delete('/paliers/:palier_id', async (req, res) => {
+  const { data: palier } = await supabase.from('paliers').select('commercant_id').eq('id', req.params.palier_id).single()
+  if (!palier || palier.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
+  await supabase.from('paliers').delete().eq('id', req.params.palier_id)
+  res.json({ success: true })
 })
 
 router.delete('/:id', async (req, res) => {
