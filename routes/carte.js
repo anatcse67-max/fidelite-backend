@@ -85,7 +85,7 @@ router.get('/:id', async (req, res) => {
 
   const { data: commercant, error: cErr } = await supabase
     .from('commercants')
-    .select('nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc')
+    .select('nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc, icon_url')
     .eq('id', client.commercant_id)
     .single()
 
