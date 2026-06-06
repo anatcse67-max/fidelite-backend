@@ -12,11 +12,22 @@ router.get('/:id/manifest.json', async (req, res) => {
 
   const { data: commercant } = await supabase
     .from('commercants')
-    .select('nom_enseigne, emoji, couleur')
+    .select('nom_enseigne, emoji, couleur, icon_url')
     .eq('id', client.commercant_id)
     .single()
 
   const origin = process.env.DASHBOARD_URL || 'https://fidelite-dashboard-kohl.vercel.app'
+
+  // Si le commerçant a une icône custom, on l'utilise, sinon icônes par défaut
+  const icons = commercant?.icon_url
+    ? [
+        { src: commercant.icon_url, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+        { src: commercant.icon_url, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      ]
+    : [
+        { src: `${origin}/icon-192.png`, sizes: '192x192', type: 'image/png' },
+        { src: `${origin}/icon-512.png`, sizes: '512x512', type: 'image/png' }
+      ]
 
   res.setHeader('Content-Type', 'application/json')
   res.json({
@@ -26,10 +37,7 @@ router.get('/:id/manifest.json', async (req, res) => {
     display: 'standalone',
     background_color: commercant?.couleur || '#6c63ff',
     theme_color: commercant?.couleur || '#6c63ff',
-    icons: [
-      { src: `${origin}/icon-192.png`, sizes: '192x192', type: 'image/png' },
-      { src: `${origin}/icon-512.png`, sizes: '512x512', type: 'image/png' }
-    ]
+    icons
   })
 })
 
