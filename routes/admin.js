@@ -179,4 +179,119 @@ router.delete('/commercants/:id', adminAuth, async (req, res) => {
   res.json({ success: true })
 })
 
+// ─── NOTES PRIVÉES ───────────────────────────────────────────────
+
+// Récupérer les notes d'un commerçant
+router.get('/commercants/:id/notes', adminAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('admin_notes')
+    .select('*')
+    .eq('commercant_id', req.params.id)
+    .order('created_at', { ascending: false })
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+// Ajouter une note
+router.post('/commercants/:id/notes', adminAuth, async (req, res) => {
+  const { contenu } = req.body
+  if (!contenu?.trim()) return res.status(400).json({ error: 'Contenu requis' })
+  const { data, error } = await supabase
+    .from('admin_notes')
+    .insert([{ commercant_id: req.params.id, contenu }])
+    .select().single()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+// Supprimer une note
+router.delete('/notes/:id', adminAuth, async (req, res) => {
+  const { error } = await supabase.from('admin_notes').delete().eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ success: true })
+})
+
+// ─── REVENUS ─────────────────────────────────────────────────────
+
+// Liste tous les paiements
+router.get('/payments', adminAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*, commercants(nom_enseigne, email, emoji, couleur, icon_url)')
+    .order('created_at', { ascending: false })
+  if (error) return res.status(500).json({ error: error.message })
+
+  const total = data.reduce((sum, p) => sum + (p.montant || 0), 0)
+  const thisMonth = new Date(); thisMonth.setDate(1); thisMonth.setHours(0,0,0,0)
+  const totalMois = data
+    .filter(p => new Date(p.created_at) >= thisMonth)
+    .reduce((sum, p) => sum + (p.montant || 0), 0)
+
+  res.json({ payments: data, total, totalMois })
+})
+
+// Ajouter un paiement manuellement
+router.post('/payments', adminAuth, async (req, res) => {
+  const { commercant_id, montant, plan, description, statut } = req.body
+  const { data, error } = await supabase
+    .from('payments')
+    .insert([{ commercant_id, montant: parseFloat(montant), plan, description, statut: statut || 'payé' }])
+    .select('*, commercants(nom_enseigne, email, emoji, couleur, icon_url)')
+    .single()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+// Supprimer un paiement
+router.delete('/payments/:id', adminAuth, async (req, res) => {
+  const { error } = await supabase.from('payments').delete().eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ success: true })
+})
+
+// ─── GRAPHIQUES GLOBAUX ───────────────────────────────────────────
+
+// Croissance commerçants + passages sur 90 jours
+router.get('/charts', adminAuth, async (req, res) => {
+  const since = new Date()
+  since.setDate(since.getDate() - 90)
+
+  const [{ data: newCommercants }, { data: passages }] = await Promise.all([
+    supabase.from('commercants').select('created_at').gte('created_at', since.toISOString()),
+    supabase.from('passages').select('created_at').gte('created_at', since.toISOString()),
+  ])
+
+  // Grouper par semaine
+  const groupByWeek = (items) => {
+    const weeks = {}
+    items?.forEach(item => {
+      const d = new Date(item.created_at)
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - d.getDay() + 1)
+      const key = monday.toISOString().slice(0, 10)
+      weeks[key] = (weeks[key] || 0) + 1
+    })
+    return Object.entries(weeks).sort().map(([date, count]) => ({ date, count }))
+  }
+
+  // Revenus par mois
+  const { data: payments } = await supabase
+    .from('payments')
+    .select('created_at, montant')
+    .eq('statut', 'payé')
+    .gte('created_at', new Date(new Date().setMonth(new Date().getMonth() - 11)).toISOString())
+
+  const revenusParMois = {}
+  payments?.forEach(p => {
+    const key = p.created_at.slice(0, 7) // YYYY-MM
+    revenusParMois[key] = (revenusParMois[key] || 0) + p.montant
+  })
+
+  res.json({
+    commercantsParSemaine: groupByWeek(newCommercants),
+    passagesParSemaine: groupByWeek(passages),
+    revenusParMois: Object.entries(revenusParMois).sort().map(([date, total]) => ({ date, total }))
+  })
+})
+
 module.exports = router
