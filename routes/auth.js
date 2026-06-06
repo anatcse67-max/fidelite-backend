@@ -57,6 +57,13 @@ router.post('/login', async (req, res) => {
   res.json({ token, commercant: data })
 })
 
+// Récupérer le profil actuel
+router.get('/me', authMiddleware, async (req, res) => {
+  const { data, error } = await supabase.from('commercants').select('*').eq('id', req.commercant.id).single()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ commercant: data })
+})
+
 // Modifier le profil
 router.put('/profile', authMiddleware, async (req, res) => {
   const { nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc,
