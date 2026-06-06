@@ -1,5 +1,20 @@
 const express = require('express')
+const webpush = require('web-push')
 const supabase = require('../lib/supabase')
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:contact@fidelite.app', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY)
+}
+
+async function sendPushToClient(clientId, title, body) {
+  const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('client_id', clientId)
+  if (!subs?.length) return
+  const payload = JSON.stringify({ title, body })
+  for (const sub of subs) {
+    try { await webpush.sendNotification(sub.subscription, payload) }
+    catch (e) { if (e.statusCode === 410) await supabase.from('push_subscriptions').delete().eq('id', sub.id) }
+  }
+}
 
 const router = express.Router()
 
@@ -88,6 +103,14 @@ router.post('/:commercant_id', async (req, res) => {
       }])
     }
   }
+
+  // Notif de bienvenue (après un court délai pour que la subscription soit créée)
+  setTimeout(async () => {
+    await sendPushToClient(data.id,
+      `Bienvenue ${prenom} ! 🎉`,
+      `Votre carte ${commercant.nom_enseigne} est prête. Revenez souvent pour cumuler vos points ! 🎁`
+    )
+  }, 5000)
 
   res.status(201).json({ ...data, parrainage_valide: !!referred_by })
 })

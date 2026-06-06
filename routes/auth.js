@@ -2,7 +2,10 @@ const express = require('express')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { Resend } = require('resend')
+const multer = require('multer')
 const supabase = require('../lib/supabase')
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } })
 
 const router = express.Router()
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -122,6 +125,39 @@ router.post('/reset-password', async (req, res) => {
   } catch {
     res.status(400).json({ error: 'Lien invalide ou expiré' })
   }
+})
+
+// Upload icône commerçant
+router.post('/upload-icon', authMiddleware, upload.single('icon'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Aucun fichier envoyé' })
+
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowed.includes(req.file.mimetype)) {
+    return res.status(400).json({ error: 'Format non supporté (JPG, PNG, WEBP, GIF uniquement)' })
+  }
+
+  const ext = req.file.originalname.split('.').pop()
+  const fileName = `${req.commercant.id}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('icons')
+    .upload(fileName, req.file.buffer, {
+      contentType: req.file.mimetype,
+      upsert: true
+    })
+
+  if (uploadError) return res.status(500).json({ error: uploadError.message })
+
+  const { data: { publicUrl } } = supabase.storage.from('icons').getPublicUrl(fileName)
+
+  const { data, error } = await supabase
+    .from('commercants')
+    .update({ icon_url: publicUrl })
+    .eq('id', req.commercant.id)
+    .select().single()
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ commercant: data, icon_url: publicUrl })
 })
 
 module.exports = router

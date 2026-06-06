@@ -1,6 +1,21 @@
 const express = require('express')
 const jwt = require('jsonwebtoken')
+const webpush = require('web-push')
 const supabase = require('../lib/supabase')
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:contact@fidelite.app', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY)
+}
+
+async function sendPushToClient(clientId, title, body) {
+  const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('client_id', clientId)
+  if (!subs?.length) return
+  const payload = JSON.stringify({ title, body })
+  for (const sub of subs) {
+    try { await webpush.sendNotification(sub.subscription, payload) }
+    catch (e) { if (e.statusCode === 410) await supabase.from('push_subscriptions').delete().eq('id', sub.id) }
+  }
+}
 
 const router = express.Router()
 
@@ -119,6 +134,13 @@ router.post('/:id/scan', async (req, res) => {
   ])
 
   if (updateResult.error) return res.status(500).json({ error: updateResult.error.message })
+
+  // Notif si récompense débloquée
+  const { data: comm } = await supabase.from('commercants').select('nom_enseigne, seuil_reward, reward_desc').eq('id', req.commercant.id).single()
+  if (comm && newPoints >= comm.seuil_reward && client.points < comm.seuil_reward) {
+    sendPushToClient(id, `🎁 Récompense débloquée !`, `Félicitations ! Vous avez atteint ${comm.seuil_reward} pts chez ${comm.nom_enseigne}. Votre récompense : ${comm.reward_desc || 'surprise'}`)
+  }
+
   res.json({ client: updateResult.data, points_ajoutes: pts })
 })
 

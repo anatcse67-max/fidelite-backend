@@ -33,6 +33,37 @@ router.get('/:id/manifest.json', async (req, res) => {
   })
 })
 
+// Modifier ses infos (client uniquement, pas de JWT)
+router.put('/:id/infos', async (req, res) => {
+  const { id } = req.params
+  const { prenom, nom, telephone, email } = req.body
+
+  const { data: client } = await supabase.from('clients').select('id').eq('id', id).single()
+  if (!client) return res.status(404).json({ error: 'Client introuvable' })
+
+  const { data, error } = await supabase
+    .from('clients')
+    .update({ prenom, nom, telephone, email })
+    .eq('id', id)
+    .select().single()
+
+  if (error) return res.status(400).json({ error: error.message })
+  res.json(data)
+})
+
+// Tous les passages (historique complet)
+router.get('/:id/passages', async (req, res) => {
+  const { id } = req.params
+  const { data, error } = await supabase
+    .from('passages')
+    .select('*')
+    .eq('client_id', id)
+    .order('created_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
 router.get('/:id', async (req, res) => {
   const { id } = req.params
 

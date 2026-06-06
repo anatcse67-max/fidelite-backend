@@ -31,7 +31,9 @@
       "Bash(curl -s https://fidelite-backend-production.up.railway.app/carte/test)",
       "Bash(curl -s https://fidelite-dashboard-kohl.vercel.app)",
       "Bash(node -e ' *)",
-      "Bash(curl -s \"https://fidelite-dashboard-kohl.vercel.app/api/manifest/ID-TEST\")"
+      "Bash(curl -s \"https://fidelite-dashboard-kohl.vercel.app/api/manifest/ID-TEST\")",
+      "Bash(dir C:\\\\Users\\\\anato /b)",
+      "PowerShell(Get-ChildItem C:\\\\Users\\\\anato\\\\fidelite-dashboard -Recurse -File | Where-Object { $_.Extension -in '.jsx','.js','.tsx','.ts','.html' } | Select-Object FullName)"
     ]
   }
 }
