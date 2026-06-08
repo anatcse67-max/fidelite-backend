@@ -110,7 +110,7 @@ router.post('/:id/scan', async (req, res) => {
   // Récupérer toutes les infos du commerçant en une seule requête
   const { data: commercant, error: cErr } = await supabase
     .from('commercants')
-    .select('pts_par_passage, nom_enseigne, seuil_reward, reward_desc, mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min')
+    .select('pts_par_passage, nom_enseigne, seuil_reward, reward_desc, mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min, reward_expiry_days, points_expiry_days')
     .eq('id', req.commercant.id)
     .single()
 
@@ -118,12 +118,68 @@ router.post('/:id/scan', async (req, res) => {
 
   const { data: client, error: clientErr } = await supabase
     .from('clients')
-    .select('points, commercant_id, referred_by, parrainage_valide')
+    .select('points, commercant_id, referred_by, parrainage_valide, reward_unlocked_at')
     .eq('id', id)
     .single()
 
   if (clientErr || !client) return res.status(404).json({ error: 'Client introuvable' })
   if (client.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
+
+  // Compter les passages existants (pour détecter le 1er scan + date du dernier)
+  const { count: nbPassages } = await supabase
+    .from('passages')
+    .select('*', { count: 'exact', head: true })
+    .eq('client_id', id)
+
+  const isPremierScan = nbPassages === 0
+
+  let oldPoints = client.points || 0
+  const clientUpdates = {}
+  const now = new Date()
+
+  // Vérifier expiration des points (inactivité)
+  let pointsExpires = false
+  if (commercant.points_expiry_days && !isPremierScan) {
+    const { data: lastPassage } = await supabase
+      .from('passages')
+      .select('created_at')
+      .eq('client_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (lastPassage) {
+      const daysSinceLast = (now - new Date(lastPassage.created_at)) / (1000 * 60 * 60 * 24)
+      if (daysSinceLast > commercant.points_expiry_days) {
+        pointsExpires = true
+        oldPoints = 0
+        clientUpdates.points = 0
+        clientUpdates.reward_unlocked_at = null
+        await supabase.from('passages').insert([{
+          client_id: id, commercant_id: req.commercant.id, points_ajoutes: 0,
+          note: `⏰ Points expirés (inactivité > ${commercant.points_expiry_days} jours)`
+        }])
+        sendPushToClient(id, '⏰ Points expirés', `Tes points chez ${commercant.nom_enseigne} ont expiré après ${commercant.points_expiry_days} jours d'inactivité.`)
+      }
+    }
+  }
+
+  // Vérifier expiration de la récompense débloquée
+  let rewardExpire = false
+  if (commercant.reward_expiry_days && client.reward_unlocked_at && !pointsExpires) {
+    const daysWithReward = (now - new Date(client.reward_unlocked_at)) / (1000 * 60 * 60 * 24)
+    if (daysWithReward > commercant.reward_expiry_days) {
+      rewardExpire = true
+      oldPoints = 0
+      clientUpdates.points = 0
+      clientUpdates.reward_unlocked_at = null
+      await supabase.from('passages').insert([{
+        client_id: id, commercant_id: req.commercant.id, points_ajoutes: 0,
+        note: `⏰ Récompense expirée (non utilisée après ${commercant.reward_expiry_days} jours)`
+      }])
+      sendPushToClient(id, '⏰ Récompense expirée', `Ta récompense chez ${commercant.nom_enseigne} a expiré car elle n'a pas été utilisée à temps.`)
+    }
+  }
 
   // Calculer les points selon le mode
   let pts
@@ -133,20 +189,16 @@ router.post('/:id/scan', async (req, res) => {
     pts = commercant.pts_par_passage || 1
   }
 
-  const oldPoints = client.points || 0
   const newPoints = oldPoints + pts
 
-  // Compter les passages existants (pour détecter le 1er scan)
-  const { count: nbPassages } = await supabase
-    .from('passages')
-    .select('*', { count: 'exact', head: true })
-    .eq('client_id', id)
-
-  const isPremierScan = nbPassages === 0
+  // Détecter si la récompense principale vient d'être débloquée
+  const seuilAtteint = commercant.seuil_reward && newPoints >= commercant.seuil_reward && oldPoints < commercant.seuil_reward
+  if (seuilAtteint) clientUpdates.reward_unlocked_at = now.toISOString()
 
   // Mise à jour points + enregistrement passage
+  clientUpdates.points = newPoints
   const [updateResult] = await Promise.all([
-    supabase.from('clients').update({ points: newPoints }).eq('id', id).select().single(),
+    supabase.from('clients').update(clientUpdates).eq('id', id).select().single(),
     supabase.from('passages').insert([{ client_id: id, commercant_id: req.commercant.id, points_ajoutes: pts, note: note || (commercant.mode_points === 'montant' && montant ? `${montant}€` : null) }])
   ])
 
@@ -199,7 +251,7 @@ router.post('/:id/scan', async (req, res) => {
     }
   }
 
-  res.json({ client: updateResult.data, points_ajoutes: pts, palier_debloque: palierDebloque || null, parrainage_bonus: parrainageBonus })
+  res.json({ client: updateResult.data, points_ajoutes: pts, palier_debloque: palierDebloque || null, parrainage_bonus: parrainageBonus, points_expires: pointsExpires, reward_expire: rewardExpire })
 })
 
 // Réinitialiser les points après récompense
@@ -210,7 +262,7 @@ router.post('/:id/reset', async (req, res) => {
   if (!client) return res.status(404).json({ error: 'Client introuvable' })
   if (client.commercant_id !== req.commercant.id) return res.status(403).json({ error: 'Accès refusé' })
 
-  const { data, error } = await supabase.from('clients').update({ points: 0 }).eq('id', id).select().single()
+  const { data, error } = await supabase.from('clients').update({ points: 0, reward_unlocked_at: null }).eq('id', id).select().single()
   if (error) return res.status(500).json({ error: error.message })
 
   // Enregistrer le reset comme passage spécial
