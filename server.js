@@ -14,7 +14,12 @@ app.use('/notifications', require('./routes/notifications'))
 app.use('/stats', require('./routes/stats'))
 app.use('/cron', require('./routes/cron'))
 app.use('/admin', require('./routes/admin'))
-app.use('/wallet', require('./routes/wallet'))
+try {
+  app.use('/wallet', require('./routes/wallet'))
+  console.log('✅ Apple Wallet route chargée')
+} catch (e) {
+  console.warn('⚠️ Apple Wallet route non disponible:', e.message)
+}
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`))
