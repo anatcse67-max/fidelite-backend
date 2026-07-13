@@ -81,27 +81,24 @@ async function generatePass(client, commercant, totalPassages) {
           value: `${points} / ${seuil}`,
         },
       ],
-      primaryFields: [
-        {
-          key: 'client_name',
-          label: '',
-          value: clientName,
-          textAlignment: 'PKTextAlignmentLeft',
-        },
-      ],
       secondaryFields: [
         {
-          key: 'reward',
-          label: '🎁 RÉCOMPENSE',
-          value: rewardDesc,
+          key: 'client_name',
+          label: 'CLIENT',
+          value: clientName,
         },
         {
-          key: 'reste',
-          label: '📍 RESTE',
-          value: remaining > 0 ? `${remaining} visite${remaining > 1 ? 's' : ''}` : '✅ Disponible !',
+          key: 'reward',
+          label: 'RÉCOMPENSE',
+          value: rewardDesc,
         },
       ],
       auxiliaryFields: [
+        {
+          key: 'reste',
+          label: 'RESTE',
+          value: remaining > 0 ? `${remaining} visite${remaining > 1 ? 's' : ''}` : '🎉 Disponible !',
+        },
         {
           key: 'passages',
           label: 'VISITES TOTALES',
