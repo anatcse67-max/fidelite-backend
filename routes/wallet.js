@@ -2,7 +2,10 @@ const express = require('express')
 const { Template } = require('@walletpass/pass-js')
 const fs = require('fs')
 const path = require('path')
+const https = require('https')
+const http = require('http')
 const supabase = require('../lib/supabase')
+const { generateBarres, generateTampons, generateEtoiles } = require('../lib/generateStrip')
 
 const router = express.Router()
 
@@ -15,6 +18,18 @@ function hexToRgb(hex) {
   return `rgb(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)})`
 }
 
+function downloadImage(url) {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http
+    client.get(url, res => {
+      const chunks = []
+      res.on('data', c => chunks.push(c))
+      res.on('end', () => resolve(Buffer.concat(chunks)))
+      res.on('error', reject)
+    }).on('error', reject)
+  })
+}
+
 async function generatePass(client, commercant, totalPassages) {
   const passesDir = path.join(__dirname, '..', 'passes')
   const templateDir = path.join(passesDir, 'template')
@@ -24,8 +39,8 @@ async function generatePass(client, commercant, totalPassages) {
   const points = client.points || 0
   const rewardDesc = commercant.reward_desc || 'Récompense'
   const nomEnseigne = commercant.nom_enseigne || 'Fidélité'
+  const passStyle = commercant.pass_style || 'tampons'
 
-  // Créer le template
   const template = new Template('storeCard', {
     passTypeIdentifier: PASS_TYPE_ID,
     teamIdentifier: TEAM_ID,
@@ -33,23 +48,44 @@ async function generatePass(client, commercant, totalPassages) {
     description: `Carte fidélité ${nomEnseigne}`,
     foregroundColor: 'rgb(255, 255, 255)',
     backgroundColor: hexToRgb(couleur),
-    labelColor: 'rgb(255, 255, 255)',
+    labelColor: 'rgba(255, 255, 255, 0.8)',
     logoText: nomEnseigne,
   })
 
-  // Charger les certificats
   template.setCertificate(fs.readFileSync(path.join(passesDir, 'pass-cert.pem')).toString())
   template.setPrivateKey(fs.readFileSync(path.join(passesDir, 'pass-key.pem')).toString())
 
-  // Ajouter les icônes
+  // Logo : utiliser l'icône custom du commerçant si disponible
+  let logoBuffer
+  if (commercant.icon_url) {
+    try {
+      logoBuffer = await downloadImage(commercant.icon_url)
+    } catch (e) {
+      logoBuffer = fs.readFileSync(path.join(templateDir, 'logo.png'))
+    }
+  } else {
+    logoBuffer = fs.readFileSync(path.join(templateDir, 'logo.png'))
+  }
+
   await template.images.add('icon', fs.readFileSync(path.join(templateDir, 'icon.png')), '1x')
   await template.images.add('icon', fs.readFileSync(path.join(templateDir, 'icon@2x.png')), '2x')
-  await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo.png')), '1x')
-  await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo@2x.png')), '2x')
+  await template.images.add('logo', logoBuffer, '1x')
+  await template.images.add('logo', logoBuffer, '2x')
 
-  // Créer le pass
+  // Strip dynamique selon le style choisi
+  let stripBuffer
+  if (passStyle === 'barres') {
+    stripBuffer = generateBarres(points, seuil, couleur)
+  } else if (passStyle === 'etoiles') {
+    stripBuffer = generateEtoiles(points, seuil, couleur)
+  } else {
+    stripBuffer = generateTampons(points, seuil, couleur)
+  }
+  await template.images.add('strip', stripBuffer, '1x')
+  await template.images.add('strip', stripBuffer, '2x')
+
   const pass = template.createPass({
-    serialNumber: `${client.id}-${Date.now()}`,
+    serialNumber: `${client.id}-v${points}`,
     description: `Carte fidélité ${nomEnseigne}`,
     storeCard: {
       primaryFields: [
@@ -78,17 +114,17 @@ async function generatePass(client, commercant, totalPassages) {
           label: 'PASSAGES',
           value: String(totalPassages || 0),
         },
-        {
-          key: 'id',
-          label: 'ID CARTE',
-          value: client.id,
-        },
       ],
       backFields: [
         {
           key: 'info',
           label: 'Programme de fidélité',
           value: `Gagnez des points à chaque visite chez ${nomEnseigne}.\nÀ partir de ${seuil} points : ${rewardDesc}`,
+        },
+        {
+          key: 'id_back',
+          label: 'Identifiant',
+          value: client.id,
         },
       ],
     },
@@ -105,7 +141,6 @@ async function generatePass(client, commercant, totalPassages) {
   return pass.asBuffer()
 }
 
-// GET /wallet/:clientId
 router.get('/:clientId', async (req, res) => {
   const { clientId } = req.params
 
@@ -119,7 +154,7 @@ router.get('/:clientId', async (req, res) => {
 
   const { data: commercant } = await supabase
     .from('commercants')
-    .select('nom_enseigne, emoji, couleur, seuil_reward, reward_desc')
+    .select('nom_enseigne, emoji, couleur, seuil_reward, reward_desc, icon_url, pass_style')
     .eq('id', client.commercant_id)
     .single()
 

@@ -68,13 +68,14 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.put('/profile', authMiddleware, async (req, res) => {
   const { nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc,
     mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min,
-    reward_expiry_days, points_expiry_days } = req.body
+    reward_expiry_days, points_expiry_days, pass_style } = req.body
 
   const { data, error } = await supabase
     .from('commercants')
     .update({ nom_enseigne, type_activite, emoji, couleur, pts_par_passage, seuil_reward, reward_desc,
       mode_points, euro_to_points, parrainage_actif, parrainage_points, parrainage_nb_min,
-      reward_expiry_days: reward_expiry_days || null, points_expiry_days: points_expiry_days || null })
+      reward_expiry_days: reward_expiry_days || null, points_expiry_days: points_expiry_days || null,
+      pass_style: pass_style || 'tampons' })
     .eq('id', req.commercant.id)
     .select().single()
 
