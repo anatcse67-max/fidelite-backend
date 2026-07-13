@@ -13,7 +13,8 @@ async function generatePass(client, commercant, totalPassages) {
   const passesDir = path.join(__dirname, '..', 'passes')
   const templateDir = path.join(passesDir, 'template')
 
-  const p12 = fs.readFileSync(path.join(passesDir, 'pass.p12'))
+  const signerCert = fs.readFileSync(path.join(passesDir, 'pass-cert.pem'))
+  const signerKey = fs.readFileSync(path.join(passesDir, 'pass-key.pem'))
   const wwdr = fs.readFileSync(path.join(passesDir, 'wwdr.pem'))
 
   const couleur = commercant.couleur || '#6c63ff'
@@ -35,9 +36,8 @@ async function generatePass(client, commercant, totalPassages) {
     },
     {
       // Certificat de signature
-      signerCert: wwdr,
-      signerKey: p12,
-      signerKeyPassphrase: 'fidelite2024',
+      signerCert: signerCert,
+      signerKey: signerKey,
       wwdr: wwdr,
     },
     {

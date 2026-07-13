@@ -35,7 +35,17 @@
       "Bash(dir C:\\\\Users\\\\anato /b)",
       "PowerShell(Get-ChildItem C:\\\\Users\\\\anato\\\\fidelite-dashboard -Recurse -File | Where-Object { $_.Extension -in '.jsx','.js','.tsx','.ts','.html' } | Select-Object FullName)",
       "mcp__Claude_in_Chrome__tabs_context_mcp",
-      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\anato\" -Depth 1 | Where-Object { $_.PSIsContainer } | Select-Object Name, FullName)"
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\anato\" -Depth 1 | Where-Object { $_.PSIsContainer } | Select-Object Name, FullName)",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "mcp__Claude_in_Chrome__select_browser",
+      "mcp__Claude_in_Chrome__tabs_create_mcp",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__get_page_text",
+      "mcp__Claude_in_Chrome__find",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "mcp__Claude_in_Chrome__read_page",
+      "mcp__Claude_in_Chrome__navigate",
+      "PowerShell(Invoke-RestMethod -Uri \"https://fidelite-backend.onrender.com/auth/login\" -Method POST -ContentType \"application/json\" -Body '{\"email\":\"anatoleblock@gmail.com\",\"password\":\"test\"}' 2>&1)"
     ]
   }
 }
