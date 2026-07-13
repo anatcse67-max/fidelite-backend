@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: fidelite-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: REGISTER_CODE
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: DASHBOARD_URL
+        value: https://fidelite-dashboard-kohl.vercel.app
+      - key: APPLE_TEAM_ID
+        value: 8N87Y49897
