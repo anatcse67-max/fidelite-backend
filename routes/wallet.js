@@ -55,22 +55,10 @@ async function generatePass(client, commercant, totalPassages) {
   template.setCertificate(fs.readFileSync(path.join(passesDir, 'pass-cert.pem')).toString())
   template.setPrivateKey(fs.readFileSync(path.join(passesDir, 'pass-key.pem')).toString())
 
-  // Logo : utiliser l'icône custom du commerçant si disponible
-  let logoBuffer
-  if (commercant.icon_url) {
-    try {
-      logoBuffer = await downloadImage(commercant.icon_url)
-    } catch (e) {
-      logoBuffer = fs.readFileSync(path.join(templateDir, 'logo.png'))
-    }
-  } else {
-    logoBuffer = fs.readFileSync(path.join(templateDir, 'logo.png'))
-  }
-
   await template.images.add('icon', fs.readFileSync(path.join(templateDir, 'icon.png')), '1x')
   await template.images.add('icon', fs.readFileSync(path.join(templateDir, 'icon@2x.png')), '2x')
-  await template.images.add('logo', logoBuffer, '1x')
-  await template.images.add('logo', logoBuffer, '2x')
+  await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo.png')), '1x')
+  await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo@2x.png')), '2x')
 
   // Strip dynamique selon le style choisi
   let stripBuffer
