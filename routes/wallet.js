@@ -60,17 +60,12 @@ async function generatePass(client, commercant, totalPassages) {
   await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo.png')), '1x')
   await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo@2x.png')), '2x')
 
-  // Strip dynamique selon le style choisi
-  let stripBuffer
-  if (passStyle === 'barres') {
-    stripBuffer = generateBarres(points, seuil, couleur)
-  } else if (passStyle === 'etoiles') {
-    stripBuffer = generateEtoiles(points, seuil, couleur)
-  } else {
-    stripBuffer = generateTampons(points, seuil, couleur)
-  }
-  await template.images.add('strip', stripBuffer, '1x')
-  await template.images.add('strip', stripBuffer, '2x')
+  // Strip dynamique selon le style choisi (1x=312x144, 2x=624x288)
+  const genFn = passStyle === 'barres' ? generateBarres : passStyle === 'etoiles' ? generateEtoiles : generateTampons
+  const strip1x = genFn(points, seuil, couleur, 312, 144)
+  const strip2x = genFn(points, seuil, couleur, 624, 288)
+  await template.images.add('strip', strip1x, '1x')
+  await template.images.add('strip', strip2x, '2x')
 
   const pass = template.createPass({
     serialNumber: `${client.id}-v${points}`,
