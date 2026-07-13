@@ -67,34 +67,44 @@ async function generatePass(client, commercant, totalPassages) {
   await template.images.add('strip', strip1x, '1x')
   await template.images.add('strip', strip2x, '2x')
 
+  const clientName = `${client.prenom || ''} ${client.nom || ''}`.trim() || 'Client'
+  const remaining = Math.max(0, seuil - points)
+
   const pass = template.createPass({
     serialNumber: `${client.id}-v${points}`,
     description: `Carte fidélité ${nomEnseigne}`,
     storeCard: {
-      primaryFields: [
+      headerFields: [
         {
-          key: 'points',
+          key: 'pts_header',
           label: 'POINTS',
           value: `${points} / ${seuil}`,
-          textAlignment: 'PKTextAlignmentCenter',
+        },
+      ],
+      primaryFields: [
+        {
+          key: 'client_name',
+          label: '',
+          value: clientName,
+          textAlignment: 'PKTextAlignmentLeft',
         },
       ],
       secondaryFields: [
         {
-          key: 'nom',
-          label: 'CLIENT',
-          value: `${client.prenom || ''} ${client.nom || ''}`.trim(),
+          key: 'reward',
+          label: '🎁 RÉCOMPENSE',
+          value: rewardDesc,
         },
         {
-          key: 'reward',
-          label: 'RÉCOMPENSE',
-          value: rewardDesc,
+          key: 'reste',
+          label: '📍 RESTE',
+          value: remaining > 0 ? `${remaining} visite${remaining > 1 ? 's' : ''}` : '✅ Disponible !',
         },
       ],
       auxiliaryFields: [
         {
           key: 'passages',
-          label: 'PASSAGES',
+          label: 'VISITES TOTALES',
           value: String(totalPassages || 0),
         },
       ],
@@ -106,7 +116,7 @@ async function generatePass(client, commercant, totalPassages) {
         },
         {
           key: 'id_back',
-          label: 'Identifiant',
+          label: 'Identifiant client',
           value: client.id,
         },
       ],
