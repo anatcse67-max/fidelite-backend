@@ -91,14 +91,15 @@ router.get('/:id', async (req, res) => {
 
   if (cErr) return res.status(500).json({ error: cErr.message })
 
-  const [{ data: passages, error: pErr }, { data: paliers }] = await Promise.all([
+  const [{ data: passages, error: pErr }, { data: paliers }, { count: totalPassages }] = await Promise.all([
     supabase.from('passages').select('*').eq('client_id', id).order('created_at', { ascending: false }).limit(10),
-    supabase.from('paliers').select('*').eq('commercant_id', client.commercant_id).order('points_requis')
+    supabase.from('paliers').select('*').eq('commercant_id', client.commercant_id).order('points_requis'),
+    supabase.from('passages').select('*', { count: 'exact', head: true }).eq('client_id', id)
   ])
 
   if (pErr) return res.status(500).json({ error: pErr.message })
 
-  res.json({ client, commercant, passages, paliers: paliers || [] })
+  res.json({ client, commercant, passages, paliers: paliers || [], totalPassages: totalPassages || 0 })
 })
 
 module.exports = router

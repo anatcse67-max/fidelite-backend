@@ -46,7 +46,7 @@ router.post('/:commercant_id', async (req, res) => {
 
   const { data: commercant } = await supabase
     .from('commercants')
-    .select('id, pts_par_passage')
+    .select('id, nom_enseigne, pts_par_passage, parrainage_actif')
     .eq('id', commercant_id)
     .single()
 
@@ -89,20 +89,7 @@ router.post('/:commercant_id', async (req, res) => {
 
   if (error) return res.status(400).json({ error: error.message })
 
-  // Bonus parrainage : +2 pts pour le parrain
-  if (referred_by) {
-    const bonusPts = Math.max(2, commercant.pts_par_passage * 2)
-    const { data: parrain } = await supabase.from('clients').select('points').eq('id', referred_by).single()
-    if (parrain) {
-      await supabase.from('clients').update({ points: parrain.points + bonusPts }).eq('id', referred_by)
-      await supabase.from('passages').insert([{
-        client_id: referred_by,
-        commercant_id,
-        points_ajoutes: bonusPts,
-        note: `🤝 Parrainage de ${prenom} — bonus ${bonusPts} pts`
-      }])
-    }
-  }
+  // Le bonus parrainage est géré au 1er scan dans clients.js (évite le double crédit)
 
   // Notif de bienvenue (après un court délai pour que la subscription soit créée)
   setTimeout(async () => {

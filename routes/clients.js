@@ -93,9 +93,17 @@ router.post('/', async (req, res) => {
     exists = !!data
   } while (exists)
 
+  // Générer un code de parrainage unique
+  let refCode, refExists
+  do {
+    refCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const { data } = await supabase.from('clients').select('id').eq('referral_code', refCode).single()
+    refExists = !!data
+  } while (refExists)
+
   const { data, error } = await supabase
     .from('clients')
-    .insert([{ id, commercant_id: req.commercant.id, prenom, nom, telephone, email }])
+    .insert([{ id, commercant_id: req.commercant.id, prenom, nom, telephone, email, referral_code: refCode }])
     .select()
     .single()
 
