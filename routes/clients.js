@@ -212,6 +212,12 @@ router.post('/:id/scan', async (req, res) => {
 
   if (updateResult.error) return res.status(500).json({ error: updateResult.error.message })
 
+  // Push Apple Wallet (sans bloquer la réponse)
+  try {
+    const { pushWalletUpdate } = require('./walletService')
+    pushWalletUpdate(id).catch(e => console.warn('Wallet push error:', e.message))
+  } catch (_) {}
+
   // Vérifier paliers débloqués
   const { data: paliers } = await supabase
     .from('paliers')

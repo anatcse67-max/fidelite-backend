@@ -16,7 +16,8 @@ app.use('/cron', require('./routes/cron'))
 app.use('/admin', require('./routes/admin'))
 try {
   app.use('/wallet', require('./routes/wallet'))
-  console.log('✅ Apple Wallet route chargée')
+  app.use('/', require('./routes/walletService'))
+  console.log('✅ Apple Wallet routes chargées')
 } catch (e) {
   console.warn('⚠️ Apple Wallet route non disponible:', e.message)
 }

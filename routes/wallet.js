@@ -2,8 +2,7 @@ const express = require('express')
 const { Template } = require('@walletpass/pass-js')
 const fs = require('fs')
 const path = require('path')
-const https = require('https')
-const http = require('http')
+const crypto = require('crypto')
 const supabase = require('../lib/supabase')
 const { generateBarres, generateTampons, generateEtoiles } = require('../lib/generateStrip')
 
@@ -11,6 +10,7 @@ const router = express.Router()
 
 const PASS_TYPE_ID = 'pass.com.fidelite.carte'
 const TEAM_ID = process.env.APPLE_TEAM_ID || '8N87Y49897'
+const WEB_SERVICE_URL = 'https://fidelite-backend.onrender.com'
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -18,19 +18,13 @@ function hexToRgb(hex) {
   return `rgb(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)})`
 }
 
-function downloadImage(url) {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http
-    client.get(url, res => {
-      const chunks = []
-      res.on('data', c => chunks.push(c))
-      res.on('end', () => resolve(Buffer.concat(chunks)))
-      res.on('error', reject)
-    }).on('error', reject)
-  })
+// Token d'auth unique par client (32 chars hex)
+function getAuthToken(clientId) {
+  return crypto.createHmac('sha256', process.env.JWT_SECRET || 'fidelite-secret')
+    .update(String(clientId)).digest('hex').substring(0, 32)
 }
 
-async function generatePass(client, commercant, totalPassages) {
+async function generatePassBuffer(client, commercant, totalPassages) {
   const passesDir = path.join(__dirname, '..', 'passes')
   const templateDir = path.join(passesDir, 'template')
 
@@ -40,6 +34,9 @@ async function generatePass(client, commercant, totalPassages) {
   const rewardDesc = commercant.reward_desc || 'Récompense'
   const nomEnseigne = commercant.nom_enseigne || 'Fidélité'
   const passStyle = commercant.pass_style || 'tampons'
+  const clientName = `${client.prenom || ''} ${client.nom || ''}`.trim() || 'Client'
+  const remaining = Math.max(0, seuil - points)
+  const authToken = getAuthToken(client.id)
 
   const template = new Template('storeCard', {
     passTypeIdentifier: PASS_TYPE_ID,
@@ -50,6 +47,8 @@ async function generatePass(client, commercant, totalPassages) {
     backgroundColor: hexToRgb(couleur),
     labelColor: 'rgba(255, 255, 255, 0.8)',
     logoText: nomEnseigne,
+    webServiceURL: WEB_SERVICE_URL,
+    authenticationToken: authToken,
   })
 
   template.setCertificate(fs.readFileSync(path.join(passesDir, 'pass-cert.pem')).toString())
@@ -60,50 +59,26 @@ async function generatePass(client, commercant, totalPassages) {
   await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo.png')), '1x')
   await template.images.add('logo', fs.readFileSync(path.join(templateDir, 'logo@2x.png')), '2x')
 
-  // Strip dynamique selon le style choisi (1x=312x144, 2x=624x288)
   const genFn = passStyle === 'barres' ? generateBarres : passStyle === 'etoiles' ? generateEtoiles : generateTampons
   const strip1x = genFn(points, seuil, couleur, 312, 144)
   const strip2x = genFn(points, seuil, couleur, 624, 288)
   await template.images.add('strip', strip1x, '1x')
   await template.images.add('strip', strip2x, '2x')
 
-  const clientName = `${client.prenom || ''} ${client.nom || ''}`.trim() || 'Client'
-  const remaining = Math.max(0, seuil - points)
-
   const pass = template.createPass({
-    serialNumber: `${client.id}-v${points}`,
+    serialNumber: client.id, // stable — ne change jamais
     description: `Carte fidélité ${nomEnseigne}`,
     storeCard: {
       headerFields: [
-        {
-          key: 'pts_header',
-          label: 'POINTS',
-          value: `${points} / ${seuil}`,
-        },
+        { key: 'pts_header', label: 'POINTS', value: `${points} / ${seuil}` },
       ],
       secondaryFields: [
-        {
-          key: 'client_name',
-          label: 'CLIENT',
-          value: clientName,
-        },
-        {
-          key: 'reward',
-          label: 'RÉCOMPENSE',
-          value: rewardDesc,
-        },
+        { key: 'client_name', label: 'CLIENT', value: clientName },
+        { key: 'reward', label: 'RÉCOMPENSE', value: rewardDesc },
       ],
       auxiliaryFields: [
-        {
-          key: 'reste',
-          label: 'RESTE',
-          value: remaining > 0 ? `${remaining} visite${remaining > 1 ? 's' : ''}` : '🎉 Disponible !',
-        },
-        {
-          key: 'passages',
-          label: 'VISITES TOTALES',
-          value: String(totalPassages || 0),
-        },
+        { key: 'reste', label: 'RESTE', value: remaining > 0 ? `${remaining} visite${remaining > 1 ? 's' : ''}` : '🎉 Disponible !' },
+        { key: 'passages', label: 'VISITES TOTALES', value: String(totalPassages || 0) },
       ],
       backFields: [
         {
@@ -111,20 +86,11 @@ async function generatePass(client, commercant, totalPassages) {
           label: 'Programme de fidélité',
           value: `Gagnez des points à chaque visite chez ${nomEnseigne}.\nÀ partir de ${seuil} points : ${rewardDesc}`,
         },
-        {
-          key: 'id_back',
-          label: 'Identifiant client',
-          value: client.id,
-        },
+        { key: 'id_back', label: 'Identifiant client', value: client.id },
       ],
     },
     barcodes: [
-      {
-        message: client.id,
-        format: 'PKBarcodeFormatQR',
-        messageEncoding: 'iso-8859-1',
-        altText: client.id,
-      },
+      { message: client.id, format: 'PKBarcodeFormatQR', messageEncoding: 'iso-8859-1', altText: client.id },
     ],
   })
 
@@ -134,12 +100,7 @@ async function generatePass(client, commercant, totalPassages) {
 router.get('/:clientId', async (req, res) => {
   const { clientId } = req.params
 
-  const { data: client, error: cErr } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('id', clientId)
-    .single()
-
+  const { data: client, error: cErr } = await supabase.from('clients').select('*').eq('id', clientId).single()
   if (cErr || !client) return res.status(404).json({ error: 'Client introuvable' })
 
   const { data: commercant } = await supabase
@@ -149,12 +110,10 @@ router.get('/:clientId', async (req, res) => {
     .single()
 
   const { count: totalPassages } = await supabase
-    .from('passages')
-    .select('*', { count: 'exact', head: true })
-    .eq('client_id', clientId)
+    .from('passages').select('*', { count: 'exact', head: true }).eq('client_id', clientId)
 
   try {
-    const pkpassBuffer = await generatePass(client, commercant || {}, totalPassages)
+    const pkpassBuffer = await generatePassBuffer(client, commercant || {}, totalPassages)
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass')
     res.setHeader('Content-Disposition', `attachment; filename="fidelite-${clientId}.pkpass"`)
     res.send(pkpassBuffer)
@@ -165,3 +124,5 @@ router.get('/:clientId', async (req, res) => {
 })
 
 module.exports = router
+module.exports.generatePassBuffer = generatePassBuffer
+module.exports.getAuthToken = getAuthToken
